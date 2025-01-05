@@ -26,13 +26,14 @@ const main = (options = {}) => async input => {
 		args.push(`--colors=${options.colors}`);
 	}
 
-	const {stdout} = await execa(gifsicle, args, {
-		encoding: null,
-		maxBuffer: Number.POSITIVE_INFINITY,
-		input,
+	return execBuffer({
+		input: buf,
+		bin: gifsicle,
+		args
+	}).catch(error => {
+		error.message = error.stderr || error.message;
+		throw error;
 	});
-
-	return stdout;
 };
 
 export default main;
