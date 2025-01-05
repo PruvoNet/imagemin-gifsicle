@@ -26,7 +26,7 @@
 		"optimize"
 	],
 	"dependencies": {
-		"exec-buffer": "^3.0.0",
+		"execa": "^1.0.0",
 		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#cjs",
 		"is-gif": "^3.0.0"
 	},

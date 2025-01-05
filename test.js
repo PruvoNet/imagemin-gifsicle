@@ -1,13 +1,13 @@
-import {Buffer} from 'node:buffer';
-import {promises as fs} from 'node:fs';
-import isGif from 'is-gif';
-import test from 'ava';
-import imageminGifsicle from './index.js';
+const {Buffer} = require('node:buffer');
+const path = require('node:path');
+const {promises: fs} = require('node:fs');
+const isGif = require('is-gif');
+const test = require('ava');
+const imageminGifsicle = require('./index.js');
 
 test('Buffer', async t => {
-	const buf = await fs.readFile(new URL('fixture.gif', import.meta.url));
+	const buf = await fs.readFile(path.resolve(__dirname, 'fixture.gif'));
 	const data = await imageminGifsicle()(buf);
-
 	t.true(data.length < buf.length);
 	t.true(isGif(data));
 });

@@ -1,17 +1,15 @@
-import {Buffer} from 'node:buffer';
-import {execa} from 'execa';
-import gifsicle from 'gifsicle';
-import isGif from 'is-gif';
+'use strict';
+const execa = require('execa');
+const gifsicle = require('gifsicle');
+const isGif = require('is-gif');
 
-const main = (options = {}) => async input => {
+module.exports =  (options = {}) => async input => {
 	if (!Buffer.isBuffer(input)) {
 		throw new TypeError(`Expected \`input\` to be of type \`Buffer\` but received type \`${typeof input}\``);
 	}
-
 	if (!isGif(input)) {
 		return input;
 	}
-
 	const args = ['--no-warnings', '--no-app-extensions'];
 
 	if (options.interlaced) {
@@ -26,14 +24,10 @@ const main = (options = {}) => async input => {
 		args.push(`--colors=${options.colors}`);
 	}
 
-	return execBuffer({
-		input: buf,
-		bin: gifsicle,
-		args
-	}).catch(error => {
-		error.message = error.stderr || error.message;
-		throw error;
+	const {stdout} = await execa(gifsicle, args, {
+		encoding: null,
+		input
 	});
-};
 
-export default main;
+	return stdout;
+};
