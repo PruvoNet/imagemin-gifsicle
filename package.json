@@ -8,7 +8,7 @@
 	"exports": "./index.js",
 	"funding": "https://github.com/imagemin/imagemin-gifsicle?sponsor=1",
 	"engines": {
-		"node": "^12.20.0 || ^14.13.1 || >=16.0.0"
+		"node": "^12.20.0 || ^14.13.1 || >=16.0.0 || >=18.0.0 || >=20.0.0 || >=22.0.0"
 	},
 	"scripts": {
 		"test": "xo && ava"
@@ -29,7 +29,7 @@
 	],
 	"dependencies": {
 		"execa": "^6.0.0",
-		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin",
+		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#esm",
 		"is-gif": "^4.0.1"
 	},
 	"devDependencies": {
