@@ -27,7 +27,7 @@
 	],
 	"dependencies": {
 		"execa": "^1.0.0",
-		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#cjs",
+		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#bb58eb197eb9caa947f79244e5280bcc5dfc61bd",
 		"is-gif": "^3.0.0"
 	},
 	"devDependencies": {
