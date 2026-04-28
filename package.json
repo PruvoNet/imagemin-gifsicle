@@ -29,7 +29,7 @@
 	],
 	"dependencies": {
 		"execa": "^6.0.0",
-		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#374c51a336dda1ec632a88d23c24c04a88304f27",
+		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#bb58eb197eb9caa947f79244e5280bcc5dfc61bd",
 		"is-gif": "^4.0.1"
 	},
 	"devDependencies": {
