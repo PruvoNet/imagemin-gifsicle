@@ -17,11 +17,16 @@ jobs:
       fail-fast: false
       matrix:
         node-version: ['24.15.0', '26.1.0']
+        variant:
+          - darwin-x64
+          - darwin-arm64
+          - linux-x64
+          - linux-x64-musl
+          - linux-arm64
+          - linux-arm64-musl
+          - win32-x64
+          - win32-arm64
         include:
-          # darwin-x64 is tested on the arm64 runner with x64 Node via
-          # Rosetta 2 (preinstalled on macos-14). gifsicle-bin's
-          # install.js sees process.arch === 'x64' under that Node and
-          # downloads the darwin-x64 release tarball.
           - variant: darwin-x64
             runner: macos-14
             node-arch: x64
@@ -61,10 +66,9 @@ jobs:
           architecture: ${{ matrix.node-arch }}
 
       - if: ${{ !matrix.musl }}
+        shell: bash
         run: npm install
 
-      # Print the binary path + architecture so the variant the install
-      # script actually picked up is visible in the log.
       - name: Show resolved gifsicle binary
         if: ${{ !matrix.musl }}
         shell: bash
@@ -78,13 +82,17 @@ jobs:
           "$bin" --version
 
       - if: ${{ !matrix.musl }}
+        shell: bash
         run: npm test
 
-      # ── Musl path: do the full install + verify + test cycle inside
-      #    the matching node:<major>-alpine image so the musl binary is
-      #    loaded by a musl libc loader. ──
+      # ── Musl path: full install + verify + test cycle inside the
+      #    matching node:<major>-alpine image so the musl binary is
+      #    loaded by a musl libc loader. Explicit `shell: bash` since
+      #    matrix.musl is only ever true on Linux runners but we still
+      #    want bash semantics for the heredoc. ──
       - name: Install + verify + test (Alpine docker)
         if: matrix.musl
+        shell: bash
         env:
           NODE_VERSION: ${{ matrix.node-version }}
         run: |
