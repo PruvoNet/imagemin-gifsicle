@@ -1,9 +1,9 @@
 {
 	"name": "imagemin-gifsicle",
-	"version": "7.0.0",
+	"version": "7.1.0",
+	"repository": "PruvoNet/imagemin-gifsicle",
 	"description": "Imagemin plugin for Gifsicle",
 	"license": "MIT",
-	"repository": "imagemin/imagemin-gifsicle",
 	"type": "module",
 	"exports": "./index.js",
 	"funding": "https://github.com/imagemin/imagemin-gifsicle?sponsor=1",
@@ -29,7 +29,7 @@
 	],
 	"dependencies": {
 		"execa": "^6.0.0",
-		"gifsicle": "https://github.com/PruvoNet/gifsicle-bin#bb58eb197eb9caa947f79244e5280bcc5dfc61bd",
+		"gifsicle": "github:PruvoNet/gifsicle-bin#v7.2.0",
 		"is-gif": "^4.0.1"
 	},
 	"devDependencies": {
