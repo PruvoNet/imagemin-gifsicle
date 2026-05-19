@@ -11,34 +11,99 @@ permissions:
 
 jobs:
   test:
-    name: Node.js ${{ matrix.node-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.variant }} / Node ${{ matrix.node-version }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         node-version: ['24.15.0', '26.1.0']
-        os: [ubuntu-latest, macos-14, windows-latest]
+        include:
+          # darwin-x64 is tested on the arm64 runner with x64 Node via
+          # Rosetta 2 (preinstalled on macos-14). gifsicle-bin's
+          # install.js sees process.arch === 'x64' under that Node and
+          # downloads the darwin-x64 release tarball.
+          - variant: darwin-x64
+            runner: macos-14
+            node-arch: x64
+          - variant: darwin-arm64
+            runner: macos-14
+          - variant: linux-x64
+            runner: ubuntu-latest
+          - variant: linux-x64-musl
+            runner: ubuntu-latest
+            musl: true
+          - variant: linux-arm64
+            runner: ubuntu-24.04-arm
+          - variant: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            musl: true
+          - variant: win32-x64
+            runner: windows-latest
+          - variant: win32-arm64
+            runner: windows-11-arm
+
     steps:
       - uses: actions/checkout@v5
 
-      # gifsicle-bin's install script tries the GH Release tarball first;
-      # these toolchain deps are only needed if it falls back to source.
-      - if: contains(matrix.os, 'macos')
+      # gifsicle-bin's install.js tries the GH Release tarball first; the
+      # toolchain deps below are only exercised if that download misses
+      # and the fallback source build kicks in.
+      - if: startsWith(matrix.runner, 'macos')
         run: brew install --quiet automake
-      - if: contains(matrix.os, 'ubuntu')
-        run: sudo apt-get update -qq && sudo apt-get install -qq -y autoconf automake libtool make
+      - if: startsWith(matrix.runner, 'ubuntu') && !matrix.musl
+        run: sudo apt-get update -qq && sudo apt-get install -qq -y autoconf automake libtool make file
 
+      # ── Native (non-musl) path ──
       - uses: actions/setup-node@v5
+        if: ${{ !matrix.musl }}
         with:
           node-version: ${{ matrix.node-version }}
+          architecture: ${{ matrix.node-arch }}
 
-      - run: npm install
-      - run: npm test
+      - if: ${{ !matrix.musl }}
+        run: npm install
 
-  # Same auto-release-on-version-bump pattern as the bin packages and
-  # node-expat. Fires on push to the repo's default branch after every
-  # test job has gone green. Creates the GitHub Release (and tag) using
-  # GITHUB_TOKEN; the tag push doesn't cascade back into the workflow.
+      # Print the binary path + architecture so the variant the install
+      # script actually picked up is visible in the log.
+      - name: Show resolved gifsicle binary
+        if: ${{ !matrix.musl }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(node --input-type=module -e "import('gifsicle').then(m => process.stdout.write(m.default))")
+          echo "Resolved gifsicle binary: $bin"
+          if command -v file >/dev/null 2>&1; then
+            file "$bin"
+          fi
+          "$bin" --version
+
+      - if: ${{ !matrix.musl }}
+        run: npm test
+
+      # ── Musl path: do the full install + verify + test cycle inside
+      #    the matching node:<major>-alpine image so the musl binary is
+      #    loaded by a musl libc loader. ──
+      - name: Install + verify + test (Alpine docker)
+        if: matrix.musl
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+        run: |
+          set -euo pipefail
+          major="${NODE_VERSION%%.*}"
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e CI=true \
+            "node:${major}-alpine" sh -c '
+              set -e
+              apk add --no-cache autoconf automake libtool make gcc musl-dev tar file
+              npm install
+              bin=$(node --input-type=module -e "import(\"gifsicle\").then(m => process.stdout.write(m.default))")
+              echo "Resolved gifsicle binary: $bin"
+              file "$bin"
+              "$bin" --version
+              npm test
+            '
+
   release:
     name: auto-release on version bump
     needs: test
