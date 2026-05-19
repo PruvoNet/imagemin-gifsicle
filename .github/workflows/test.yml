@@ -1,26 +1,152 @@
-name: test
+name: ci
+
 on:
-  - push
-  - pull_request
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   test:
-    name: Node.js ${{ matrix.node-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.variant }} / Node ${{ matrix.node-version }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        node-version:
-          - 20
-          - 22
-          - 24
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        node-version: ['24.15.0', '26.1.0']
+        variant:
+          - darwin-x64
+          - darwin-arm64
+          - linux-x64
+          - linux-x64-musl
+          - linux-arm64
+          - linux-arm64-musl
+          - win32-x64
+          - win32-arm64
+        include:
+          - variant: darwin-x64
+            runner: macos-14
+            node-arch: x64
+          - variant: darwin-arm64
+            runner: macos-14
+          - variant: linux-x64
+            runner: ubuntu-latest
+          - variant: linux-x64-musl
+            runner: ubuntu-latest
+            musl: true
+          - variant: linux-arm64
+            runner: ubuntu-24.04-arm
+          - variant: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            musl: true
+          - variant: win32-x64
+            runner: windows-latest
+          - variant: win32-arm64
+            runner: windows-11-arm
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v5
+
+      # gifsicle-bin's install.js tries the GH Release tarball first; the
+      # toolchain deps below are only exercised if that download misses
+      # and the fallback source build kicks in.
+      - if: startsWith(matrix.runner, 'macos')
+        run: brew install --quiet automake
+      - if: startsWith(matrix.runner, 'ubuntu') && !matrix.musl
+        run: sudo apt-get update -qq && sudo apt-get install -qq -y autoconf automake libtool make file
+
+      # ── Native (non-musl) path ──
+      - uses: actions/setup-node@v5
+        if: ${{ !matrix.musl }}
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm install
-      - run: npm test
+          architecture: ${{ matrix.node-arch }}
+
+      - if: ${{ !matrix.musl }}
+        shell: bash
+        run: npm install
+
+      - name: Show resolved gifsicle binary
+        if: ${{ !matrix.musl }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(node --input-type=module -e "import('gifsicle').then(m => process.stdout.write(m.default))")
+          echo "Resolved gifsicle binary: $bin"
+          if command -v file >/dev/null 2>&1; then
+            file "$bin"
+          fi
+          "$bin" --version
+
+      - if: ${{ !matrix.musl }}
+        shell: bash
+        run: npm test
+
+      # ── Musl path: full install + verify + test cycle inside the
+      #    matching node:<major>-alpine image so the musl binary is
+      #    loaded by a musl libc loader. Explicit `shell: bash` since
+      #    matrix.musl is only ever true on Linux runners but we still
+      #    want bash semantics for the heredoc. ──
+      - name: Install + verify + test (Alpine docker)
+        if: matrix.musl
+        shell: bash
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+        run: |
+          set -euo pipefail
+          major="${NODE_VERSION%%.*}"
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e CI=true \
+            "node:${major}-alpine" sh -c '
+              set -e
+              apk add --no-cache autoconf automake libtool make gcc musl-dev tar file git
+              npm install
+              bin=$(node --input-type=module -e "import(\"gifsicle\").then(m => process.stdout.write(m.default))")
+              echo "Resolved gifsicle binary: $bin"
+              file "$bin"
+              "$bin" --version
+              npm test
+            '
+
+  release:
+    name: auto-release on version bump
+    needs: test
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=v$v"    >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag already exists on origin
+        id: check_tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already exists — nothing to release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag does not exist — will release."
+          fi
+
+      - if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
