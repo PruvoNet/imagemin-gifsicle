@@ -1,6 +1,13 @@
-name: test
+name: ci
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -14,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # gifsicle's install script tries the GH Release tarball first;
+      # gifsicle-bin's install script tries the GH Release tarball first;
       # these toolchain deps are only needed if it falls back to source.
       - if: contains(matrix.os, 'macos')
         run: brew install --quiet automake
@@ -27,3 +34,46 @@ jobs:
 
       - run: npm install
       - run: npm test
+
+  # Same auto-release-on-version-bump pattern as the bin packages and
+  # node-expat. Fires on push to the repo's default branch after every
+  # test job has gone green. Creates the GitHub Release (and tag) using
+  # GITHUB_TOKEN; the tag push doesn't cascade back into the workflow.
+  release:
+    name: auto-release on version bump
+    needs: test
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=v$v"    >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag already exists on origin
+        id: check_tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already exists — nothing to release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag does not exist — will release."
+          fi
+
+      - if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
