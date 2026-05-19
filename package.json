@@ -5,7 +5,13 @@
 	"description": "Imagemin plugin for Gifsicle",
 	"license": "MIT",
 	"type": "module",
-	"exports": "./index.js",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		}
+	},
+	"types": "./index.d.ts",
 	"funding": "https://github.com/imagemin/imagemin-gifsicle?sponsor=1",
 	"engines": {
 		"node": "^20 || ^22 || >=24"
@@ -14,7 +20,8 @@
 		"test": "ava"
 	},
 	"files": [
-		"index.js"
+		"index.js",
+		"index.d.ts"
 	],
 	"keywords": [
 		"compress",
