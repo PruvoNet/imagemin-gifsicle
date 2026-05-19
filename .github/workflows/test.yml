@@ -103,7 +103,7 @@ jobs:
             -e CI=true \
             "node:${major}-alpine" sh -c '
               set -e
-              apk add --no-cache autoconf automake libtool make gcc musl-dev tar file
+              apk add --no-cache autoconf automake libtool make gcc musl-dev tar file git
               npm install
               bin=$(node --input-type=module -e "import(\"gifsicle\").then(m => process.stdout.write(m.default))")
               echo "Resolved gifsicle binary: $bin"
